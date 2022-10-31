@@ -2,9 +2,16 @@ const express = require('express')
 const cors = require('cors')
 const app = express()
 const port = 8080
-
+var expressWs = require('express-ws')(app);
 app.use(cors())        // Avoid CORS errors in browsers
 app.use(express.json()) // Populate req.body
+
+app.ws('/', function(ws, req) {
+    ws.on('message', function(msg) {
+      expressWs.getWss().clients.forEach(client => client.send(msg));
+    });
+    console.log('socket', req.testing);
+  });
 
 let times = [
     {id: 1, day: "2022-02-14", start: "8:00", end: "8:30", bookedBy: ""},
@@ -83,7 +90,7 @@ app.patch('/times/edit/:id', requireAdmin, (req, res) => {
     // Change name, day, start, end and phone for given id if provided
     if (req.body.name) {
         // Check that name is valid
-        if (!/^\w{4,}/.test(req.body.name)) {
+        if (!/^\w{2,}/.test(req.body.name)) {
             return res.status(400).send({error: 'Invalid name'})
         }
         time.bookedBy = req.body.name
@@ -117,6 +124,7 @@ app.patch('/times/edit/:id', requireAdmin, (req, res) => {
         }
         time.phone = req.body.phone
     }
+    expressWs.getWss().clients.forEach(client => client.send(JSON.stringify(time)));
     res.status(200).send(time)
 })
 
@@ -171,7 +179,8 @@ app.post('/times', requireAdmin, (req, res) => {
     const maxTimeId = Math.max(...ids);
     newTime['id'] = maxTimeId + 1
     times.push(newTime)
-    res.status(200).send(newTime)
+    expressWs.getWss().clients.forEach(client => client.send(JSON.stringify(newTime)));
+    res.status(200).end()
 })
 
 
@@ -186,12 +195,13 @@ app.delete('/times/:id', requireAdmin, (req, res) => {
         return res.status(404).send({error: 'Time not found'})
     }
     times = times.filter((time) => time.id !== parseInt(req.params.id));
+    expressWs.getWss().clients.forEach(client => client.send(parseInt(req.params.id)));
     res.status(200).end()
 })
 
 app.get('/times/available', (req, res) => {
-    var timesAvailable = [];
-    var i = 0;
+    let timesAvailable = [];
+    let i = 0;
     while (i < times.length) {
         if (!times[i].bookedBy) {
             timesAvailable.push(times[i]);
@@ -234,7 +244,7 @@ app.patch('/times/:id', (req, res) => {
     // Change name and phone for given id
     time.bookedBy = req.body.name
     time.phone = req.body.phone
-
+    expressWs.getWss().clients.forEach(client => client.send(time.id));
     res.status(200).end()
 })
 app.post('/users', (req, res) => {
